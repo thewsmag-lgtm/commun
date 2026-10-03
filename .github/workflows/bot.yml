@@ -32,6 +32,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           STATE_KEY: ${{ secrets.STATE_KEY }}
           BLACKLIST: ${{ secrets.BLACKLIST }}
+          COMMENT_RULES: ${{ secrets.COMMENT_RULES }}
+          GENERIC_PHRASES: ${{ secrets.GENERIC_PHRASES }}
           # variables
           HIVE_ACCOUNT: ${{ vars.HIVE_ACCOUNT }}
           MIN_HP: ${{ vars.MIN_HP }}
