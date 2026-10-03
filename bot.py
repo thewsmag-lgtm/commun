@@ -22,7 +22,10 @@ ACCOUNT = env("HIVE_ACCOUNT")
 POSTING_KEY = env("HIVE_POSTING_KEY")
 MIN_HP = float(env("MIN_HP", "5000"))
 DAILY_LIMIT = int(env("DAILY_LIMIT", "20"))
-MAX_PER_RUN = int(env("MAX_PER_RUN", "4"))
+MAX_PER_RUN = int(env("MAX_PER_RUN", "1"))
+RUN_EVERY_MIN = int(env("RUN_EVERY_MIN", "30"))
+MIN_GAP_MIN = int(env("MIN_GAP_MIN", "25"))
+JITTER_MAX_SEC = int(env("JITTER_MAX_SEC", "300"))
 COOLDOWN_DAYS = float(env("COOLDOWN_DAYS", "1"))
 MODEL = env("MODEL", "gemini-3.5-flash")
 LLM_KEY = env("GEMINI_API_KEY")
@@ -233,6 +236,19 @@ def main():
         save_state(fernet, state)
         return
 
+    if not DRY_RUN:
+        # spread the daily quota across the day instead of posting in bursts
+        t = now()
+        midnight = (t + dt.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        slots_left = max(1, int((midnight - t).total_seconds() // (RUN_EVERY_MIN * 60)))
+        p_run = min(1.0, (DAILY_LIMIT - sent_today) / slots_left)
+        too_soon = t.timestamp() - state.get("last_any", 0) < MIN_GAP_MIN * 60
+        if too_soon or random.random() > p_run:
+            print("skipping this run")
+            save_state(fernet, state)
+            return
+        time.sleep(random.randint(0, JITTER_MAX_SEC))
+
     posts = recent_posts()
     already = {t["permlink"] for t in state["tracked"]}
     cool = COOLDOWN_DAYS * 86400
@@ -286,6 +302,7 @@ def main():
             state["tracked"].append({"target": p["author"], "permlink": permlink,
                                      "ts": now().timestamp(), "checked": False})
             state["last_comment"][p["author"]] = now().timestamp()
+            state["last_any"] = now().timestamp()
             state["sent"][today] += 1
             state["recent"] = (state["recent"] + [text])[-30:]
             time.sleep(random.randint(20, 90))
