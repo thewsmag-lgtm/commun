@@ -34,15 +34,7 @@ MAX_PAGES = 30
 MAX_HP_CHECKS = 150
 CHECK_AFTER_HOURS = 6
 
-SYSTEM = """You write short blog comments as a friendly reader.
-Rules:
-- English, warm and conversational, 2 to 3 sentences at most.
-- Speak directly to the author and mention something specific from the post.
-- Do not use long dashes and do not use the Oxford comma.
-- No links, no promotion, no asking for votes, no generic praise like "great post".
-- Reply with exactly SKIP if the post is mostly images, a link dump, spam,
-  or you cannot say something honest and relevant about it.
-Return only the comment text."""
+SYSTEM = env("COMMENT_RULES") or "Write one short, relevant comment for this blog post. Reply with exactly SKIP if you cannot."
 
 
 def rpc(method, params):
@@ -66,7 +58,7 @@ def parse_ts(s):
 # ---------- encrypted state ----------
 def load_state():
     f = Fernet(env("STATE_KEY").encode())
-    base = {"priority": {}, "tracked": [], "sent": {}, "last_comment": {}}
+    base = {"priority": {}, "tracked": [], "sent": {}, "last_comment": {}, "recent": []}
     if not os.path.exists(STATE_FILE):
         return f, base
     with open(STATE_FILE, "rb") as fh:
@@ -138,6 +130,29 @@ def update_priority(state):
                         if not t.get("checked") or t_now - t["ts"] < 24 * 3600 * 30]
 
 
+DEFAULT_GENERIC = ("great post,truly great,amazing post,awesome post,thanks for sharing,"
+                   "well written,keep up the good work,keep it up,nice post,great content")
+GENERIC = [g.strip().lower() for g in (env("GENERIC_PHRASES") or DEFAULT_GENERIC).split(",") if g.strip()]
+
+
+def is_generic(text, post):
+    low = text.lower()
+    if any(g in low for g in GENERIC):
+        return True
+    body = (post["title"] + " " + post["body"]).lower()
+    words = {w for w in re.findall(r"[a-z]{6,}", low)}
+    return not any(w in body for w in words)  # must reference something from the post
+
+
+def too_similar(text, recent):
+    words = set(re.findall(r"[a-z']+", text.lower()))
+    for old in recent:
+        o = set(re.findall(r"[a-z']+", old.lower()))
+        if words and o and len(words & o) / len(words | o) > 0.6:
+            return True
+    return False
+
+
 def make_comment(post):
     r = requests.post(
         LLM_URL,
@@ -151,6 +166,7 @@ def make_comment(post):
     parts = r.json()["candidates"][0]["content"]["parts"]
     text = "".join(p.get("text", "") for p in parts).strip()
     text = text.replace("\u2014", ",").replace("\u2013", ",")
+    text = re.sub(r"@(?=[A-Za-z0-9])", "", text)  # no @mentions
     return None if text.upper().startswith("SKIP") or len(text) < 20 else text
 
 
@@ -197,7 +213,7 @@ def main():
         except Exception as e:
             print("skip:", type(e).__name__)
             continue
-        if not text:
+        if not text or is_generic(text, p) or too_similar(text, state["recent"]):
             continue
 
         if DRY_RUN:
@@ -215,6 +231,7 @@ def main():
                                      "ts": now().timestamp(), "checked": False})
             state["last_comment"][p["author"]] = now().timestamp()
             state["sent"][today] += 1
+            state["recent"] = (state["recent"] + [text])[-30:]
             time.sleep(random.randint(20, 90))
         done += 1
 
