@@ -139,8 +139,14 @@ DEFAULT_GENERIC = ("great post,truly great,amazing post,awesome post,thanks for 
 GENERIC = [g.strip().lower() for g in (env("GENERIC_PHRASES") or DEFAULT_GENERIC).split(",") if g.strip()]
 
 
+VISUAL = ("image", "photo", "picture", "video", "screenshot", "footage", " pic ", "pics",
+          "looked ", "looks like", "looking so", "the view")
+
+
 def is_generic(text, post):
     low = text.lower()
+    if any(v in low + " " for v in VISUAL):
+        return True  # the model only reads text, so it must not describe visuals
     if any(g in low for g in GENERIC):
         return True
     body = (post["title"] + " " + post["body"]).lower()
