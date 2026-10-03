@@ -2,7 +2,7 @@ name: sync
 
 on:
   schedule:
-    - cron: "17 */2 * * *"
+    - cron: "7,37 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -40,6 +40,9 @@ jobs:
           MIN_HP: ${{ vars.MIN_HP }}
           DAILY_LIMIT: ${{ vars.DAILY_LIMIT }}
           MAX_PER_RUN: ${{ vars.MAX_PER_RUN }}
+          RUN_EVERY_MIN: ${{ vars.RUN_EVERY_MIN }}
+          MIN_GAP_MIN: ${{ vars.MIN_GAP_MIN }}
+          JITTER_MAX_SEC: ${{ vars.JITTER_MAX_SEC }}
           COOLDOWN_DAYS: ${{ vars.COOLDOWN_DAYS }}
           MODEL: ${{ vars.MODEL }}
           DRY_RUN: ${{ vars.DRY_RUN }}
