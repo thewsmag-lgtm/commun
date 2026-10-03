@@ -164,10 +164,13 @@ def make_comment(post):
         json={"systemInstruction": {"parts": [{"text": SYSTEM}]},
               "contents": [{"role": "user", "parts": [
                   {"text": f"Title: {post['title']}\n\n{post['body'][:6000]}"}]}],
-              "generationConfig": {"maxOutputTokens": 400, "temperature": 0.8}},
+              "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.8}},
         timeout=60)
     r.raise_for_status()
-    parts = r.json()["candidates"][0]["content"]["parts"]
+    cand = r.json()["candidates"][0]
+    if cand.get("finishReason") not in (None, "STOP"):
+        return None  # cut off or blocked, never post a partial comment
+    parts = cand["content"]["parts"]
     text = "".join(p.get("text", "") for p in parts).strip()
     text = text.replace("\u2014", ",").replace("\u2013", ",")
     text = re.sub(r"@(?=[A-Za-z0-9])", "", text)  # no @mentions
