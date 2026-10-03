@@ -30,7 +30,7 @@ LLM_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:gene
 DRY_RUN = env("DRY_RUN", "true").lower() != "false"
 LOG_TEXT = env("LOG_TEXT", "false").lower() == "true"
 BLACKLIST = {a.strip().lower() for a in env("BLACKLIST").split(",") if a.strip()}
-MAX_PAGES = 30
+MAX_PAGES = int(env("MAX_PAGES", "100"))
 MAX_HP_CHECKS = 150
 CHECK_AFTER_HOURS = 6
 
@@ -76,8 +76,12 @@ def recent_posts():
     cutoff = now() - dt.timedelta(hours=24)
     out, start = [], {}
     for _ in range(MAX_PAGES):
-        res = rpc("condenser_api.get_discussions_by_created",
-                  [{"tag": "", "limit": 100, **start}])
+        try:
+            res = rpc("condenser_api.get_discussions_by_created",
+                      [{"tag": "", "limit": 20, **start}])
+        except Exception as e:
+            print("fetch stopped:", type(e).__name__)
+            break
         if start:
             res = res[1:]
         if not res:
