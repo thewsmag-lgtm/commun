@@ -6,7 +6,6 @@ import random
 import re
 import time
 
-import anthropic
 import requests
 from cryptography.fernet import Fernet
 from nectar import Hive
@@ -25,7 +24,9 @@ MIN_HP = float(env("MIN_HP", "5000"))
 DAILY_LIMIT = int(env("DAILY_LIMIT", "20"))
 MAX_PER_RUN = int(env("MAX_PER_RUN", "4"))
 COOLDOWN_DAYS = float(env("COOLDOWN_DAYS", "1"))
-MODEL = env("CLAUDE_MODEL", "claude-sonnet-5-5")
+MODEL = env("MODEL", "gemini-3.5-flash")
+LLM_KEY = env("GEMINI_API_KEY")
+LLM_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
 DRY_RUN = env("DRY_RUN", "true").lower() != "false"
 LOG_TEXT = env("LOG_TEXT", "false").lower() == "true"
 BLACKLIST = {a.strip().lower() for a in env("BLACKLIST").split(",") if a.strip()}
@@ -137,12 +138,18 @@ def update_priority(state):
                         if not t.get("checked") or t_now - t["ts"] < 24 * 3600 * 30]
 
 
-def make_comment(client, post):
-    msg = client.messages.create(
-        model=MODEL, max_tokens=200, system=SYSTEM,
-        messages=[{"role": "user",
-                   "content": f"Title: {post['title']}\n\n{post['body'][:6000]}"}])
-    text = msg.content[0].text.strip()
+def make_comment(post):
+    r = requests.post(
+        LLM_URL,
+        headers={"x-goog-api-key": LLM_KEY, "Content-Type": "application/json"},
+        json={"systemInstruction": {"parts": [{"text": SYSTEM}]},
+              "contents": [{"role": "user", "parts": [
+                  {"text": f"Title: {post['title']}\n\n{post['body'][:6000]}"}]}],
+              "generationConfig": {"maxOutputTokens": 400, "temperature": 0.8}},
+        timeout=60)
+    r.raise_for_status()
+    parts = r.json()["candidates"][0]["content"]["parts"]
+    text = "".join(p.get("text", "") for p in parts).strip()
     text = text.replace("\u2014", ",").replace("\u2013", ",")
     return None if text.upper().startswith("SKIP") or len(text) < 20 else text
 
@@ -172,7 +179,6 @@ def main():
     cands.sort(key=lambda p: p["author"] not in state["priority"])  # priority first
     print(f"posts={len(posts)} candidates={len(cands)} budget={budget}")
 
-    client = anthropic.Anthropic()
     hive = None if DRY_RUN else Hive(node=[API], keys=[POSTING_KEY])
     checks, done, seen_authors = 0, 0, set()
 
@@ -186,7 +192,8 @@ def main():
         try:
             if hp_of(p["author"]) < MIN_HP:
                 continue
-            text = make_comment(client, p)
+            text = make_comment(p)
+            time.sleep(5)
         except Exception as e:
             print("skip:", type(e).__name__)
             continue
