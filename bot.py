@@ -97,6 +97,13 @@ def recent_posts():
 
 
 _ratio = None
+_acc = {}
+
+
+def account(author):
+    if author not in _acc:
+        _acc[author] = rpc("condenser_api.get_accounts", [[author]])[0]
+    return _acc[author]
 
 
 def hp_of(author):
@@ -105,10 +112,40 @@ def hp_of(author):
         g = rpc("condenser_api.get_dynamic_global_properties", [])
         _ratio = (float(g["total_vesting_fund_hive"].split()[0])
                   / float(g["total_vesting_shares"].split()[0]))
-    a = rpc("condenser_api.get_accounts", [[author]])[0]
+    a = account(author)
     v = lambda k: float(a[k].split()[0])
     vests = v("vesting_shares") + v("received_vesting_shares") - v("delegated_vesting_shares")
     return vests * _ratio
+
+
+# ---------- skip curation / project / automated accounts ----------
+SUBSTR_HINTS = ["curat", "curacion", "kurasyon"] + [
+    h.strip().lower() for h in env("EXTRA_SKIP_HINTS").split(",") if h.strip()]
+TOKEN_HINTS = {"bot", "news", "official", "project", "community", "daily", "team",
+               "pool", "market", "trail", "witness", "dao", "app"}
+PROFILE_HINTS = ("curation", "curator", "official account", "project account",
+                 "community account", "automated", "this is a bot", "bot account",
+                 "curate")
+MAX_POSTS_PER_DAY = int(env("MAX_POSTS_PER_DAY", "4"))
+
+
+def name_looks_like_project(author):
+    low = author.lower()
+    if re.fullmatch(r"hive-\d+", low):
+        return True
+    if any(h in low for h in SUBSTR_HINTS):
+        return True
+    return any(t in TOKEN_HINTS for t in re.split(r"[.\-_0-9]+", low))
+
+
+def profile_looks_like_project(author):
+    try:
+        meta = json.loads(account(author).get("posting_json_metadata") or "{}")
+    except ValueError:
+        return False
+    prof = meta.get("profile", {}) if isinstance(meta, dict) else {}
+    text = " ".join(str(prof.get(k, "")) for k in ("name", "about")).lower()
+    return any(h in text for h in PROFILE_HINTS)
 
 
 def update_priority(state):
@@ -204,6 +241,12 @@ def main():
              and p["author"] != ACCOUNT
              and now().timestamp() - state["last_comment"].get(p["author"], 0) > cool
              and len(p["body"]) > 400]
+    counts = {}
+    for p in posts:
+        counts[p["author"]] = counts.get(p["author"], 0) + 1
+    cands = [p for p in cands
+             if counts[p["author"]] < MAX_POSTS_PER_DAY  # heavy posters are usually projects
+             and not name_looks_like_project(p["author"])]
     random.shuffle(cands)
     cands.sort(key=lambda p: p["author"] not in state["priority"])  # priority first
     print(f"posts={len(posts)} candidates={len(cands)} budget={budget}")
@@ -219,7 +262,7 @@ def main():
         seen_authors.add(p["author"])
         checks += 1
         try:
-            if hp_of(p["author"]) < MIN_HP:
+            if hp_of(p["author"]) < MIN_HP or profile_looks_like_project(p["author"]):
                 continue
             text = make_comment(p)
             time.sleep(5)
