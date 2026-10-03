@@ -34,6 +34,7 @@ jobs:
           BLACKLIST: ${{ secrets.BLACKLIST }}
           COMMENT_RULES: ${{ secrets.COMMENT_RULES }}
           GENERIC_PHRASES: ${{ secrets.GENERIC_PHRASES }}
+          EXTRA_SKIP_HINTS: ${{ secrets.EXTRA_SKIP_HINTS }}
           # variables
           HIVE_ACCOUNT: ${{ vars.HIVE_ACCOUNT }}
           MIN_HP: ${{ vars.MIN_HP }}
@@ -43,6 +44,7 @@ jobs:
           MODEL: ${{ vars.MODEL }}
           DRY_RUN: ${{ vars.DRY_RUN }}
           LOG_TEXT: ${{ vars.LOG_TEXT }}
+          MAX_POSTS_PER_DAY: ${{ vars.MAX_POSTS_PER_DAY }}
         run: python bot.py
 
       - name: Save encrypted state
