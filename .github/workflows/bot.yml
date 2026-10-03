@@ -47,6 +47,7 @@ jobs:
           MODEL: ${{ vars.MODEL }}
           DRY_RUN: ${{ vars.DRY_RUN }}
           LOG_TEXT: ${{ vars.LOG_TEXT }}
+          MAX_WORDS: ${{ vars.MAX_WORDS }}
           MAX_POSTS_PER_DAY: ${{ vars.MAX_POSTS_PER_DAY }}
         run: python bot.py
 
