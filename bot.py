@@ -130,6 +130,7 @@ PROFILE_HINTS = ("curation", "curator", "official account", "project account",
                  "community account", "automated", "this is a bot", "bot account",
                  "curate")
 MAX_POSTS_PER_DAY = int(env("MAX_POSTS_PER_DAY", "4"))
+MAX_WORDS = int(env("MAX_WORDS", "35"))
 
 
 def name_looks_like_project(author):
@@ -220,7 +221,9 @@ def make_comment(post):
     text = "".join(p.get("text", "") for p in parts).strip()
     text = text.replace("\u2014", ",").replace("\u2013", ",")
     text = re.sub(r"@(?=[A-Za-z0-9])", "", text)  # no @mentions
-    return None if text.upper().startswith("SKIP") or len(text) < 20 else text
+    if text.upper().startswith("SKIP") or len(text) < 15 or len(text.split()) > MAX_WORDS:
+        return None
+    return text
 
 
 def main():
