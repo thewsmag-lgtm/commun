@@ -42,13 +42,29 @@ SYSTEM = env("COMMENT_RULES") or "Write one short, relevant comment for this blo
 
 
 def rpc(method, params):
-    r = requests.post(API, json={"jsonrpc": "2.0", "method": method,
-                                 "params": params, "id": 1}, timeout=30)
-    r.raise_for_status()
-    j = r.json()
-    if "error" in j:
-        raise RuntimeError(j["error"])
-    return j["result"]
+    # Retry temporary Hive API failures (e.g. rate limits or gateway errors).
+    last_error = None
+    for attempt in range(3):
+        try:
+            r = requests.post(API, json={"jsonrpc": "2.0", "method": method,
+                                         "params": params, "id": 1}, timeout=30)
+            r.raise_for_status()
+            j = r.json()
+            if "error" in j:
+                raise RuntimeError(j["error"])
+            return j["result"]
+        except requests.exceptions.HTTPError as e:
+            last_error = e
+            status = e.response.status_code if e.response is not None else "unknown"
+            print(f"Hive API HTTP {status} on {method} (attempt {attempt + 1}/3)")
+            if status not in (429, 500, 502, 503, 504):
+                raise
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            last_error = e
+            print(f"Hive API connection issue on {method} (attempt {attempt + 1}/3)")
+        if attempt < 2:
+            time.sleep(2 ** attempt)
+    raise last_error
 
 
 def now():
@@ -287,7 +303,9 @@ def main():
             text = make_comment(p)
             time.sleep(5)
         except Exception as e:
-            print("skip:", type(e).__name__)
+            detail = getattr(getattr(e, "response", None), "status_code", None)
+            suffix = f" HTTP {detail}" if detail is not None else f": {e}"
+            print(f"skip: {type(e).__name__}{suffix}")
             continue
         if not text or is_generic(text, p) or too_similar(text, state["recent"]):
             continue
@@ -299,10 +317,11 @@ def main():
         else:
             # Vote on the target post first. If voting fails, do not publish the comment.
             try:
-                hive.vote(weight=UPVOTE_WEIGHT,
-                          identifier=f"{p['author']}/{p['permlink']}")
+                hive.vote(weight=UPVOTE_WEIGHT / 100,
+                          identifier=f"@{p['author']}/{p['permlink']}",
+                          account=ACCOUNT)
             except Exception as e:
-                print("upvote failed; comment skipped:", type(e).__name__)
+                print(f"upvote failed; comment skipped: {type(e).__name__}: {e}")
                 continue
 
             permlink = re.sub(r"[^a-z0-9-]", "-", f"re-{p['author']}-{int(time.time())}".lower())
