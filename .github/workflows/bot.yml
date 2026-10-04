@@ -50,6 +50,9 @@ jobs:
           LOG_TEXT: ${{ vars.LOG_TEXT }}
           MAX_WORDS: ${{ vars.MAX_WORDS }}
           MIN_AGE_MIN: ${{ vars.MIN_AGE_MIN }}
+          GEMINI_DAILY_CAP: ${{ vars.GEMINI_DAILY_CAP }}
+          GEMINI_PER_RUN: ${{ vars.GEMINI_PER_RUN }}
+          GEMINI_GAP_SEC: ${{ vars.GEMINI_GAP_SEC }}
           MAX_AGE_HOURS: ${{ vars.MAX_AGE_HOURS }}
           MAX_POSTS_PER_DAY: ${{ vars.MAX_POSTS_PER_DAY }}
         run: python bot.py
