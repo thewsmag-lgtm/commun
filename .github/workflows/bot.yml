@@ -49,6 +49,8 @@ jobs:
           DRY_RUN: ${{ vars.DRY_RUN }}
           LOG_TEXT: ${{ vars.LOG_TEXT }}
           MAX_WORDS: ${{ vars.MAX_WORDS }}
+          MIN_AGE_MIN: ${{ vars.MIN_AGE_MIN }}
+          MAX_AGE_HOURS: ${{ vars.MAX_AGE_HOURS }}
           MAX_POSTS_PER_DAY: ${{ vars.MAX_POSTS_PER_DAY }}
         run: python bot.py
 
