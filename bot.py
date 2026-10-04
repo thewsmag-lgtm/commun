@@ -35,6 +35,8 @@ DRY_RUN = env("DRY_RUN", "true").lower() != "false"
 LOG_TEXT = env("LOG_TEXT", "false").lower() == "true"
 BLACKLIST = {a.strip().lower() for a in env("BLACKLIST").split(",") if a.strip()}
 MAX_PAGES = int(env("MAX_PAGES", "100"))
+MIN_AGE_MIN = int(env("MIN_AGE_MIN", "30"))
+MAX_AGE_HOURS = float(env("MAX_AGE_HOURS", "24"))
 MAX_HP_CHECKS = 150
 CHECK_AFTER_HOURS = 6
 
@@ -93,7 +95,7 @@ def save_state(f, state):
 
 # ---------- hive helpers ----------
 def recent_posts():
-    cutoff = now() - dt.timedelta(hours=24)
+    cutoff = now() - dt.timedelta(hours=MAX_AGE_HOURS)
     out, start = [], {}
     for _ in range(MAX_PAGES):
         try:
@@ -285,7 +287,8 @@ def main():
              if p["author"].lower() not in BLACKLIST
              and p["author"] != ACCOUNT
              and now().timestamp() - state["last_comment"].get(p["author"], 0) > cool
-             and len(p["body"]) > 400]
+             and len(p["body"]) > 400
+             and (now() - parse_ts(p["created"])).total_seconds() >= MIN_AGE_MIN * 60]
     counts = {}
     for p in posts:
         counts[p["author"]] = counts.get(p["author"], 0) + 1
@@ -314,7 +317,14 @@ def main():
         except Exception as e:
             detail = getattr(getattr(e, "response", None), "status_code", None)
             suffix = f" HTTP {detail}" if detail is not None else f": {e}"
-            print(f"skip: {type(e).__name__}{suffix}")
+            resp = getattr(e, "response", None)
+            src = "gemini" if resp is not None and "generativelanguage" in str(resp.url) else "hive"
+            print(f"skip: {type(e).__name__}{suffix} ({src})")
+            if detail == 429 and src == "gemini":
+                try:
+                    print("gemini says:", resp.json()["error"]["message"][:250])
+                except Exception:
+                    pass
             fails = fails + 1 if detail == 429 else 0
             if fails >= 3:
                 print("rate limited, stopping this run")
