@@ -35,6 +35,9 @@ DRY_RUN = env("DRY_RUN", "true").lower() != "false"
 LOG_TEXT = env("LOG_TEXT", "false").lower() == "true"
 BLACKLIST = {a.strip().lower() for a in env("BLACKLIST").split(",") if a.strip()}
 MAX_PAGES = int(env("MAX_PAGES", "100"))
+GEMINI_DAILY_CAP = int(env("GEMINI_DAILY_CAP", "18"))  # free tier: 20 requests/day
+GEMINI_PER_RUN = int(env("GEMINI_PER_RUN", "3"))
+GEMINI_GAP_SEC = int(env("GEMINI_GAP_SEC", "13"))
 MIN_AGE_MIN = int(env("MIN_AGE_MIN", "30"))
 MAX_AGE_HOURS = float(env("MAX_AGE_HOURS", "24"))
 MAX_HP_CHECKS = 150
@@ -224,10 +227,10 @@ def too_similar(text, recent):
 
 
 def llm_post(**kw):
-    """POST to Gemini, retrying on rate limits and temporary server errors."""
+    """POST to Gemini, retrying only on temporary server errors (a 429 is not retried)."""
     for i in range(3):
         r = requests.post(LLM_URL, **kw)
-        if r.status_code in (429, 500, 502, 503, 504) and i < 2:
+        if r.status_code in (500, 502, 503, 504) and i < 2:
             time.sleep(20 * (i + 1) + random.randint(0, 5))
             continue
         r.raise_for_status()
@@ -261,6 +264,9 @@ def main():
     today = now().strftime("%Y-%m-%d")
     sent_today = state["sent"].get(today, 0)
     state["sent"] = {today: sent_today}
+    gem_today = state.setdefault("gem", {}).get(today, 0)
+    state["gem"] = {today: gem_today}
+    run_calls = 0
     budget = min(MAX_PER_RUN, DAILY_LIMIT - sent_today)
     if budget <= 0:
         print("daily limit reached")
@@ -312,8 +318,16 @@ def main():
         try:
             if hp_of(p["author"]) < MIN_HP or profile_looks_like_project(p["author"]):
                 continue
-            text = make_comment(p)
-            time.sleep(5)
+            if gem_today >= GEMINI_DAILY_CAP or run_calls >= GEMINI_PER_RUN:
+                print("gemini call cap reached, stopping this run")
+                break
+            gem_today += 1
+            run_calls += 1
+            state["gem"][today] = gem_today
+            try:
+                text = make_comment(p)
+            finally:
+                time.sleep(GEMINI_GAP_SEC)  # stay under the per-minute limit
         except Exception as e:
             detail = getattr(getattr(e, "response", None), "status_code", None)
             suffix = f" HTTP {detail}" if detail is not None else f": {e}"
@@ -325,6 +339,8 @@ def main():
                     print("gemini says:", resp.json()["error"]["message"][:250])
                 except Exception:
                     pass
+                print("gemini quota hit, stopping this run")
+                break
             fails = fails + 1 if detail == 429 else 0
             if fails >= 3:
                 print("rate limited, stopping this run")
