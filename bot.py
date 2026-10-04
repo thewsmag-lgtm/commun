@@ -23,6 +23,7 @@ POSTING_KEY = env("HIVE_POSTING_KEY")
 MIN_HP = float(env("MIN_HP", "5000"))
 DAILY_LIMIT = int(env("DAILY_LIMIT", "20"))
 MAX_PER_RUN = int(env("MAX_PER_RUN", "1"))
+UPVOTE_WEIGHT = max(1, min(10000, int(env("UPVOTE_WEIGHT", "10000"))))
 RUN_EVERY_MIN = int(env("RUN_EVERY_MIN", "30"))
 MIN_GAP_MIN = int(env("MIN_GAP_MIN", "25"))
 JITTER_MAX_SEC = int(env("JITTER_MAX_SEC", "300"))
@@ -292,15 +293,24 @@ def main():
             continue
 
         if DRY_RUN:
-            print(f"[dry run] -> {p['author']}/{p['permlink']}\n{text}\n" if LOG_TEXT
-                  else "[dry run] comment generated")
+            print(f"[dry run] would upvote ({UPVOTE_WEIGHT / 100:.0f}%) then comment -> "
+                  f"{p['author']}/{p['permlink']}\\n{text}\\n" if LOG_TEXT
+                  else f"[dry run] would upvote then comment -> {p['author']}/{p['permlink']}")
         else:
+            # Vote on the target post first. If voting fails, do not publish the comment.
+            try:
+                hive.vote(weight=UPVOTE_WEIGHT,
+                          identifier=f"{p['author']}/{p['permlink']}")
+            except Exception as e:
+                print("upvote failed; comment skipped:", type(e).__name__)
+                continue
+
             permlink = re.sub(r"[^a-z0-9-]", "-", f"re-{p['author']}-{int(time.time())}".lower())
             try:
                 hive.post(title="", body=text, author=ACCOUNT, permlink=permlink,
                           reply_identifier=f"{p['author']}/{p['permlink']}")
             except Exception as e:
-                print("post failed:", type(e).__name__)
+                print("post failed after upvote:", type(e).__name__)
                 continue
             state["tracked"].append({"target": p["author"], "permlink": permlink,
                                      "ts": now().timestamp(), "checked": False})
