@@ -221,16 +221,25 @@ def too_similar(text, recent):
     return False
 
 
+def llm_post(**kw):
+    """POST to Gemini, retrying on rate limits and temporary server errors."""
+    for i in range(3):
+        r = requests.post(LLM_URL, **kw)
+        if r.status_code in (429, 500, 502, 503, 504) and i < 2:
+            time.sleep(20 * (i + 1) + random.randint(0, 5))
+            continue
+        r.raise_for_status()
+        return r
+
+
 def make_comment(post):
-    r = requests.post(
-        LLM_URL,
+    r = llm_post(
         headers={"x-goog-api-key": LLM_KEY, "Content-Type": "application/json"},
         json={"systemInstruction": {"parts": [{"text": SYSTEM}]},
               "contents": [{"role": "user", "parts": [
                   {"text": f"Title: {post['title']}\n\n{post['body'][:6000]}"}]}],
               "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.8}},
         timeout=60)
-    r.raise_for_status()
     cand = r.json()["candidates"][0]
     if cand.get("finishReason") not in (None, "STOP"):
         return None  # cut off or blocked, never post a partial comment
@@ -288,7 +297,7 @@ def main():
     print(f"posts={len(posts)} candidates={len(cands)} budget={budget}")
 
     hive = None if DRY_RUN else Hive(node=[API], keys=[POSTING_KEY])
-    checks, done, seen_authors = 0, 0, set()
+    checks, done, seen_authors, fails = 0, 0, set(), 0
 
     for p in cands:
         if done >= budget or checks >= MAX_HP_CHECKS:
@@ -306,13 +315,18 @@ def main():
             detail = getattr(getattr(e, "response", None), "status_code", None)
             suffix = f" HTTP {detail}" if detail is not None else f": {e}"
             print(f"skip: {type(e).__name__}{suffix}")
+            fails = fails + 1 if detail == 429 else 0
+            if fails >= 3:
+                print("rate limited, stopping this run")
+                break
             continue
+        fails = 0
         if not text or is_generic(text, p) or too_similar(text, state["recent"]):
             continue
 
         if DRY_RUN:
             print(f"[dry run] would upvote ({UPVOTE_WEIGHT / 100:.0f}%) then comment -> "
-                  f"{p['author']}/{p['permlink']}\\n{text}\\n" if LOG_TEXT
+                  f"{p['author']}/{p['permlink']}\n{text}\n" if LOG_TEXT
                   else f"[dry run] would upvote then comment -> {p['author']}/{p['permlink']}")
         else:
             # Vote on the target post first. If voting fails, do not publish the comment.
