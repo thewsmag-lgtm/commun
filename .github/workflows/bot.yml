@@ -37,6 +37,7 @@ jobs:
           EXTRA_SKIP_HINTS: ${{ secrets.EXTRA_SKIP_HINTS }}
           # variables
           HIVE_ACCOUNT: ${{ vars.HIVE_ACCOUNT }}
+          APP_NAME: ${{ vars.APP_NAME }}
           MIN_HP: ${{ vars.MIN_HP }}
           DAILY_LIMIT: ${{ vars.DAILY_LIMIT }}
           MAX_PER_RUN: ${{ vars.MAX_PER_RUN }}
