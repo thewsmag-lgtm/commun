@@ -35,12 +35,15 @@ jobs:
           COMMENT_RULES: ${{ secrets.COMMENT_RULES }}
           GENERIC_PHRASES: ${{ secrets.GENERIC_PHRASES }}
           EXTRA_SKIP_HINTS: ${{ secrets.EXTRA_SKIP_HINTS }}
+          EXTRA_KEYWORDS: ${{ secrets.EXTRA_KEYWORDS }}
           # variables
           HIVE_ACCOUNT: ${{ vars.HIVE_ACCOUNT }}
           APP_NAME: ${{ vars.APP_NAME }}
           MIN_HP: ${{ vars.MIN_HP }}
           BLOCKED_COMMUNITIES: ${{ vars.BLOCKED_COMMUNITIES }}
           SKIP_BENEFICIARIES: ${{ vars.SKIP_BENEFICIARIES }}
+          SKIP_CRYPTO_POSTS: ${{ vars.SKIP_CRYPTO_POSTS }}
+          KEYWORD_MIN: ${{ vars.KEYWORD_MIN }}
           DAILY_LIMIT: ${{ vars.DAILY_LIMIT }}
           MAX_PER_RUN: ${{ vars.MAX_PER_RUN }}
           UPVOTE_WEIGHT: ${{ vars.UPVOTE_WEIGHT }}
