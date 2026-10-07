@@ -40,6 +40,7 @@ jobs:
           APP_NAME: ${{ vars.APP_NAME }}
           MIN_HP: ${{ vars.MIN_HP }}
           BLOCKED_COMMUNITIES: ${{ vars.BLOCKED_COMMUNITIES }}
+          SKIP_BENEFICIARIES: ${{ vars.SKIP_BENEFICIARIES }}
           DAILY_LIMIT: ${{ vars.DAILY_LIMIT }}
           MAX_PER_RUN: ${{ vars.MAX_PER_RUN }}
           UPVOTE_WEIGHT: ${{ vars.UPVOTE_WEIGHT }}
