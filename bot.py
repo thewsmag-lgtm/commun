@@ -36,6 +36,7 @@ DRY_RUN = env("DRY_RUN", "true").lower() != "false"
 LOG_TEXT = env("LOG_TEXT", "false").lower() == "true"
 BLACKLIST = {a.strip().lower() for a in env("BLACKLIST").split(",") if a.strip()}
 BLOCKED_COMMUNITIES = {c.strip().lstrip("@").lower() for c in env("BLOCKED_COMMUNITIES").split(",") if c.strip()}
+SKIP_BENEFICIARIES = {b.strip().lstrip("@").lower() for b in env("SKIP_BENEFICIARIES").split(",") if b.strip()}
 MAX_PAGES = int(env("MAX_PAGES", "100"))
 GEMINI_DAILY_CAP = int(env("GEMINI_DAILY_CAP", "18"))  # free tier: 20 requests/day
 GEMINI_PER_RUN = int(env("GEMINI_PER_RUN", "3"))
@@ -259,6 +260,11 @@ def make_comment(post):
     return text
 
 
+def has_skipped_beneficiary(post):
+    return any(str(b.get("account", "")).lower() in SKIP_BENEFICIARIES
+               for b in post.get("beneficiaries") or [])
+
+
 def main():
     fernet, state = load_state()
     update_priority(state)
@@ -289,6 +295,9 @@ def main():
         time.sleep(random.randint(0, JITTER_MAX_SEC))
 
     posts = recent_posts()
+    if SKIP_BENEFICIARIES:
+        n_ben = sum(1 for p in posts if has_skipped_beneficiary(p))
+        print(f"posts with a skipped beneficiary (skipped): {n_ben}")
     if BLOCKED_COMMUNITIES:
         n_blocked = sum(1 for p in posts if p.get("category", "").lower() in BLOCKED_COMMUNITIES)
         print(f"posts in blocked communities (skipped): {n_blocked}")
@@ -297,6 +306,7 @@ def main():
     cands = [p for p in posts
              if p["author"].lower() not in BLACKLIST
              and p.get("category", "").lower() not in BLOCKED_COMMUNITIES
+             and not has_skipped_beneficiary(p)
              and p["author"] != ACCOUNT
              and now().timestamp() - state["last_comment"].get(p["author"], 0) > cool
              and len(p["body"]) > 400
