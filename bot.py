@@ -37,6 +37,14 @@ LOG_TEXT = env("LOG_TEXT", "false").lower() == "true"
 BLACKLIST = {a.strip().lower() for a in env("BLACKLIST").split(",") if a.strip()}
 BLOCKED_COMMUNITIES = {c.strip().lstrip("@").lower() for c in env("BLOCKED_COMMUNITIES").split(",") if c.strip()}
 SKIP_BENEFICIARIES = {b.strip().lstrip("@").lower() for b in env("SKIP_BENEFICIARIES").split(",") if b.strip()}
+SKIP_CRYPTO_POSTS = env("SKIP_CRYPTO_POSTS", "false").lower() == "true"  # leave crypto posts to the crypto bots
+KEYWORD_MIN = int(env("KEYWORD_MIN", "3"))  # must match the crypto bots
+# Same keyword list as the crypto bots, so both sides split the posts the same way.
+_kw = ["bitcoin", "btc", "ethereum", "eth", "crypto\\w*", "blockchain", "defi", "altcoins?",
+       "stablecoins?", "solana", "binance", "staking", "tokens?", "nft", "web3", "halving",
+       "usdt", "xrp", "dogecoin", "wallets?"] + [
+    re.escape(k.strip().lower()) for k in env("EXTRA_KEYWORDS").split(",") if k.strip()]
+KW_RE = re.compile(r"\b(?:" + "|".join(_kw) + r")\b", re.I)
 MAX_PAGES = int(env("MAX_PAGES", "100"))
 GEMINI_DAILY_CAP = int(env("GEMINI_DAILY_CAP", "18"))  # free tier: 20 requests/day
 GEMINI_PER_RUN = int(env("GEMINI_PER_RUN", "3"))
@@ -265,6 +273,12 @@ def has_skipped_beneficiary(post):
                for b in post.get("beneficiaries") or [])
 
 
+def is_crypto_post(p):
+    """True if the crypto bots would treat this post as theirs (same text slice and threshold)."""
+    text = f"{p['title']}\n{p['body'][:4000]}"
+    return len(KW_RE.findall(text)) >= KEYWORD_MIN
+
+
 def main():
     fernet, state = load_state()
     update_priority(state)
@@ -298,6 +312,9 @@ def main():
     if SKIP_BENEFICIARIES:
         n_ben = sum(1 for p in posts if has_skipped_beneficiary(p))
         print(f"posts with a skipped beneficiary (skipped): {n_ben}")
+    if SKIP_CRYPTO_POSTS:
+        n_crypto = sum(1 for p in posts if is_crypto_post(p))
+        print(f"posts skipped as crypto (left to the crypto bots): {n_crypto}")
     if BLOCKED_COMMUNITIES:
         n_blocked = sum(1 for p in posts if p.get("category", "").lower() in BLOCKED_COMMUNITIES)
         print(f"posts in blocked communities (skipped): {n_blocked}")
@@ -307,6 +324,7 @@ def main():
              if p["author"].lower() not in BLACKLIST
              and p.get("category", "").lower() not in BLOCKED_COMMUNITIES
              and not has_skipped_beneficiary(p)
+             and not (SKIP_CRYPTO_POSTS and is_crypto_post(p))
              and p["author"] != ACCOUNT
              and now().timestamp() - state["last_comment"].get(p["author"], 0) > cool
              and len(p["body"]) > 400
