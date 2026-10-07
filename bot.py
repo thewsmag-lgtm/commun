@@ -35,6 +35,7 @@ LLM_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:gene
 DRY_RUN = env("DRY_RUN", "true").lower() != "false"
 LOG_TEXT = env("LOG_TEXT", "false").lower() == "true"
 BLACKLIST = {a.strip().lower() for a in env("BLACKLIST").split(",") if a.strip()}
+BLOCKED_COMMUNITIES = {c.strip().lstrip("@").lower() for c in env("BLOCKED_COMMUNITIES").split(",") if c.strip()}
 MAX_PAGES = int(env("MAX_PAGES", "100"))
 GEMINI_DAILY_CAP = int(env("GEMINI_DAILY_CAP", "18"))  # free tier: 20 requests/day
 GEMINI_PER_RUN = int(env("GEMINI_PER_RUN", "3"))
@@ -288,10 +289,14 @@ def main():
         time.sleep(random.randint(0, JITTER_MAX_SEC))
 
     posts = recent_posts()
+    if BLOCKED_COMMUNITIES:
+        n_blocked = sum(1 for p in posts if p.get("category", "").lower() in BLOCKED_COMMUNITIES)
+        print(f"posts in blocked communities (skipped): {n_blocked}")
     already = {t["permlink"] for t in state["tracked"]}
     cool = COOLDOWN_DAYS * 86400
     cands = [p for p in posts
              if p["author"].lower() not in BLACKLIST
+             and p.get("category", "").lower() not in BLOCKED_COMMUNITIES
              and p["author"] != ACCOUNT
              and now().timestamp() - state["last_comment"].get(p["author"], 0) > cool
              and len(p["body"]) > 400
