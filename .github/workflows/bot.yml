@@ -39,6 +39,7 @@ jobs:
           HIVE_ACCOUNT: ${{ vars.HIVE_ACCOUNT }}
           APP_NAME: ${{ vars.APP_NAME }}
           MIN_HP: ${{ vars.MIN_HP }}
+          BLOCKED_COMMUNITIES: ${{ vars.BLOCKED_COMMUNITIES }}
           DAILY_LIMIT: ${{ vars.DAILY_LIMIT }}
           MAX_PER_RUN: ${{ vars.MAX_PER_RUN }}
           UPVOTE_WEIGHT: ${{ vars.UPVOTE_WEIGHT }}
