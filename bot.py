@@ -38,7 +38,7 @@ BLACKLIST = {a.strip().lower() for a in env("BLACKLIST").split(",") if a.strip()
 BLOCKED_COMMUNITIES = {c.strip().lstrip("@").lower() for c in env("BLOCKED_COMMUNITIES").split(",") if c.strip()}
 SKIP_BENEFICIARIES = {b.strip().lstrip("@").lower() for b in env("SKIP_BENEFICIARIES").split(",") if b.strip()}
 SKIP_CRYPTO_POSTS = env("SKIP_CRYPTO_POSTS", "false").lower() == "true"  # leave crypto posts to the crypto bots
-KEYWORD_MIN = int(env("KEYWORD_MIN", "3"))  # must match the crypto bots
+KEYWORD_MIN = int(env("KEYWORD_MIN", "1"))  # must match the crypto bots
 # Same keyword list as the crypto bots, so both sides split the posts the same way.
 _kw = ["bitcoin", "btc", "ethereum", "eth", "crypto\\w*", "blockchain", "defi", "altcoins?",
        "stablecoins?", "solana", "binance", "staking", "tokens?", "nft", "web3", "halving",
